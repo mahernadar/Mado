@@ -5,6 +5,7 @@ import numpy as np
 class Customer:
     def __init__(self, customer):
         self.id = customer["id"]
+        self.avatar = customer["avatar"]
         self.current_location = list(customer["transition_probabilities"].keys())[0]
         self.transition_probabilities = customer["transition_probabilities"]
         self.path = [self.current_location]
@@ -24,11 +25,12 @@ class Customer:
         return self.path
 
     def get_customer_data(self):
-        return {"id": self.id, "path": self.path}
+        return {"id": self.id, "avatar": self.avatar, "path": self.path}
 
 
 customer = {
     "id": 1,
+    "avatar": "pinga",
     "transition_probabilities": {
         "entrance": {
             "checkout": 0.0,
