@@ -1,5 +1,13 @@
+import json
+import time
+from datetime import date, datetime
+from datetime import time as tm
+from datetime import timedelta
+
 import cv2
 import numpy as np
+
+from customer import Customer, Supermarket
 from tiles_coordinates import *
 
 TILE_SIZE = 32
@@ -17,10 +25,6 @@ MARKET = """
 ##...................#
 ##############GG######
 """.strip()
-
-
-
-
 
 
 class SupermarketMap:
@@ -83,11 +87,20 @@ class SupermarketMap:
                 x = col * TILE_SIZE
                 self.image[y : y + TILE_SIZE, x : x + TILE_SIZE] = bm
 
-    def draw(self, frame):
+    def draw(self, frame, avatar=None, position=None):
         """
         draws the image into a frame
         """
         frame[0 : self.image.shape[0], 0 : self.image.shape[1]] = self.image
+
+        position_coordinates = supermarket_locations_coordinates[position]
+
+        if position is not None:
+            x = position_coordinates[0] * TILE_SIZE
+            y = position_coordinates[1] * TILE_SIZE
+            
+            avatar_tile = self.extract_tile(avatar)
+            frame[y : y + TILE_SIZE, x : x + TILE_SIZE] = avatar_tile
 
     def write_image(self, filename):
         """writes the image into a file"""
@@ -95,23 +108,69 @@ class SupermarketMap:
 
 
 if __name__ == "__main__":
+    # initialize supermarket map:
     background = np.zeros((500, 704, 3), np.uint8)
     tiles = cv2.imread("data/tiles.png")
 
-    market = SupermarketMap(MARKET, tiles)
+    market_map = SupermarketMap(MARKET, tiles)
+    
+    # set initial states at the start of SuperMarket day:
+    # id starts as 1 each day; starting hour is 7:00 am
+    id = 1
+    sm_time = tm(7, 0)
 
-    while True:
+    supermarket = Supermarket(
+        customers_list=[],
+        active_customers=[],
+        time=sm_time,
+        last_id=id
+    )
+
+    # load the pre-calculated probas dictionary:
+    with open("data/tm_and_entry_probs_per_hour.json", "r") as fp:
+        probas_per_hour = json.load(fp)
+
+    while supermarket.time < tm(22, 0):
+
         frame = background.copy()
-        market.draw(frame)
+        
+        time.sleep(2)
+        
+        print(supermarket.customers_list)
 
-        # https://www.ascii-code.com/
+        supermarket.add_customer()
+        
+        print(len(supermarket.customers_list))
+        
+        market_map.draw(frame, avatar=customer.avatar, position=customer.current_location)
+        
+        
+        while customer.active:
+
+            customer.move(
+                transition_matrix=probas_per_hour[str(current_hour)]["tm"][
+                    customer.current_location
+                ]
+            )
+
+            print(customer.current_location)
+
+            market.draw(frame, avatar=customer.avatar, position=customer.current_location)
+
         key = cv2.waitKey(1)
 
         if key == 113:  # 'q' key
             break
 
+
         cv2.imshow("frame", frame)
+
+        # we choose to jump 20 minutes at a time for the visualization's sake:
+        # each hour of the day has its own Transition Matrix + entrance probabilities:
+        supermarket.time = (
+            datetime.combine(date(1, 1, 1), sm_time) + timedelta(minutes=20)
+        ).time()
 
     cv2.destroyAllWindows()
 
-    market.write_image("supermarket.png")
+    market_map.write_image("supermarket.png")

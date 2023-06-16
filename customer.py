@@ -1,25 +1,37 @@
 import time
+import json
 import numpy as np
 
+from tiles_coordinates import *
+
+# from tiles_skeleton import *
+# load the pre-calculated probas dictionary:
+with open("data/tm_and_entry_probs_per_hour.json", "r") as fp:
+    probas_per_hour = json.load(fp)
 
 class Customer:
-    def __init__(self, customer):
-        self.id = customer["id"]
-        self.avatar = customer["avatar"]
-        self.current_location = list(customer["transition_probabilities"].keys())[0]
-        self.transition_probabilities = customer["transition_probabilities"]
+    def __init__(self, id, location):
+        self.id = id
+        self.avatar = self.set_customer_avatar()
+        self.current_location = location
         self.path = [self.current_location]
+        self.active = True
 
-    def move(self):
-        while self.current_location != "checkout":
-            current_transition_probabilities = self.transition_probabilities[
-                self.current_location
-            ]
-            self.current_location = np.random.choice(
-                list(current_transition_probabilities.keys()),
-                p=list(current_transition_probabilities.values()),
+    def set_customer_avatar(self):
+        avatar_index = np.random.choice(len(customers_avatar_tiles_coordinates))
+        avatar_tuple = customers_avatar_tiles_coordinates[avatar_index]
+        return avatar_tuple
+
+    def move(self, transition_matrix: dict):
+        if self.current_location != "checkout":
+            next_location = np.random.choice(
+                list(transition_matrix.keys()),
+                p=list(transition_matrix.values()),
             )
-            self.path.append(self.current_location)
+            # append the next location to the path of the customer in question:
+            self.path.append(next_location)
+        else:
+            self.active = False
 
     def get_path(self):
         return self.path
@@ -28,74 +40,37 @@ class Customer:
         return {"id": self.id, "avatar": self.avatar, "path": self.path}
 
 
-customer = {
-    "id": 1,
-    "avatar": "pinga",
-    "transition_probabilities": {
-        "entrance": {
-            "checkout": 0.0,
-            "dairy": 0.2,
-            "drinks": 0.2,
-            "fruit": 0.3,
-            "spices": 0.3,
-        },
-        "dairy": {
-            "checkout": 0.3,
-            "dairy": 0.0,
-            "drinks": 0.2,
-            "fruit": 0.2,
-            "spices": 0.3,
-        },
-        "drinks": {
-            "checkout": 0.4,
-            "dairy": 0.1,
-            "drinks": 0.0,
-            "fruit": 0.2,
-            "spices": 0.3,
-        },
-        "fruit": {
-            "checkout": 0.5,
-            "dairy": 0.1,
-            "drinks": 0.1,
-            "fruit": 0.1,
-            "spices": 0.2,
-        },
-        "spices": {
-            "checkout": 0.6,
-            "dairy": 0.1,
-            "drinks": 0.1,
-            "fruit": 0.05,
-            "spices": 0.15,
-        },
-        "checkout": {"checkout": 1.0},
-    },
-}
-
-
 class Supermarket:
-    def __init__(self, customers, transition_probabilities):
-        self.customers = customers
-        self.transition_probabilities = transition_probabilities
+    def __init__(self, customers_list, active_customers, time, last_id):
+        
+        self.customers_list = customers_list
+        self.active_customers = active_customers
+        self.time = time
+        self.last_id = last_id
 
     def generate_gif(self):
         paths = [customer.get_path() for customer in self.customers]
         time.sleep()
+        
+    def add_customer(self):
+        current_hour = self.time.hour
+        initial_location = np.random.choice(
+            list(probas_per_hour[str(current_hour)]["entry_probas"].keys()),
+            p=list(probas_per_hour[str(current_hour)]["entry_probas"].values()),
+        )
+        customer = Customer(id=id, location=initial_location)
+        self.customers_list.append(customer)
+        self.active_customers.append(customer)
+        self.last_id += 1
 
     def move_customers(self):
         for customer in self.customers:
             customer.move()
+            
+    def clean_inactive_customers(self):
+        for customer in self.active_customers:
+            if not customer.active:
+                self.active_customers.remove(customer)
 
     def get_customers_paths(self):
-        return [customer.get_path() for customer in self.customers]
-
-
-cust1 = Customer(customer)
-
-cust1.move()
-print(cust1.current_location)
-
-cust1.move()
-print(cust1.current_location)
-
-
-print(cust1.get_customer_data())
+        return [customer.get_path() for customer in self.customers_list]
