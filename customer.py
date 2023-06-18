@@ -1,5 +1,6 @@
-import time
 import json
+import time
+
 import numpy as np
 
 from tiles_coordinates import *
@@ -8,6 +9,7 @@ from tiles_coordinates import *
 # load the pre-calculated probas dictionary:
 with open("data/tm_and_entry_probs_per_hour.json", "r") as fp:
     probas_per_hour = json.load(fp)
+
 
 class Customer:
     def __init__(self, id, location):
@@ -24,10 +26,12 @@ class Customer:
 
     def move(self, transition_matrix: dict):
         if self.current_location != "checkout":
+            tm = transition_matrix[self.current_location]
             next_location = np.random.choice(
-                list(transition_matrix.keys()),
-                p=list(transition_matrix.values()),
+                list(tm.keys()),
+                p=list(tm.values()),
             )
+            self.current_location = next_location
             # append the next location to the path of the customer in question:
             self.path.append(next_location)
         else:
@@ -42,7 +46,6 @@ class Customer:
 
 class Supermarket:
     def __init__(self, customers_list, active_customers, time, last_id):
-        
         self.customers_list = customers_list
         self.active_customers = active_customers
         self.time = time
@@ -51,7 +54,7 @@ class Supermarket:
     def generate_gif(self):
         paths = [customer.get_path() for customer in self.customers]
         time.sleep()
-        
+
     def add_customer(self):
         current_hour = self.time.hour
         initial_location = np.random.choice(
@@ -64,13 +67,14 @@ class Supermarket:
         self.last_id += 1
 
     def move_customers(self):
-        for customer in self.customers:
-            customer.move()
-            
+        for customer in self.active_customers:
+            transition_dict = probas_per_hour[str(self.time.hour)]["tm"]
+            customer.move(transition_matrix=transition_dict)
+
     def clean_inactive_customers(self):
         for customer in self.active_customers:
             if not customer.active:
                 self.active_customers.remove(customer)
 
     def get_customers_paths(self):
-        return [customer.get_path() for customer in self.customers_list]
+        return [{str(customer.id): customer.get_path()} for customer in self.customers_list]
