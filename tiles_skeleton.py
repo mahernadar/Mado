@@ -87,20 +87,25 @@ class SupermarketMap:
                 x = col * TILE_SIZE
                 self.image[y : y + TILE_SIZE, x : x + TILE_SIZE] = bm
 
-    def draw(self, frame, avatar=None, position=None):
+    def draw(self, frame, customers=None):
         """
         draws the image into a frame
         """
         frame[0 : self.image.shape[0], 0 : self.image.shape[1]] = self.image
 
-        position_coordinates = supermarket_locations_coordinates[position]
+        if customers is not None:
+            for customer in customers:
+                location = customer.current_location
+                location_coordinates = supermarket_locations_coordinates[
+                    location
+                ]
+                avatar = customer.avatar
 
-        if position is not None:
-            x = position_coordinates[0] * TILE_SIZE
-            y = position_coordinates[1] * TILE_SIZE
-            
-            avatar_tile = self.extract_tile(avatar)
-            frame[y : y + TILE_SIZE, x : x + TILE_SIZE] = avatar_tile
+                x = location_coordinates[0] * TILE_SIZE
+                y = location_coordinates[1] * TILE_SIZE
+
+                avatar_tile = self.extract_tile(avatar)
+                frame[y : y + TILE_SIZE, x : x + TILE_SIZE] = avatar_tile
 
     def write_image(self, filename):
         """writes the image into a file"""
@@ -113,17 +118,14 @@ if __name__ == "__main__":
     tiles = cv2.imread("data/tiles.png")
 
     market_map = SupermarketMap(MARKET, tiles)
-    
+
     # set initial states at the start of SuperMarket day:
     # id starts as 1 each day; starting hour is 7:00 am
     id = 1
     sm_time = tm(7, 0)
 
     supermarket = Supermarket(
-        customers_list=[],
-        active_customers=[],
-        time=sm_time,
-        last_id=id
+        customers_list=[], active_customers=[], time=sm_time, last_id=id
     )
 
     # load the pre-calculated probas dictionary:
@@ -131,37 +133,30 @@ if __name__ == "__main__":
         probas_per_hour = json.load(fp)
 
     while supermarket.time < tm(22, 0):
-
         frame = background.copy()
-        
-        time.sleep(2)
-        
-        print(supermarket.customers_list)
 
+        time.sleep(1)
+
+        supermarket.clean_inactive_customers()
+
+        # todo: add customer one by one?
         supermarket.add_customer()
-        
-        print(len(supermarket.customers_list))
-        
-        market_map.draw(frame, avatar=customer.avatar, position=customer.current_location)
-        
-        
-        while customer.active:
+        supermarket.move_customers()
 
-            customer.move(
-                transition_matrix=probas_per_hour[str(current_hour)]["tm"][
-                    customer.current_location
-                ]
-            )
-
-            print(customer.current_location)
-
-            market.draw(frame, avatar=customer.avatar, position=customer.current_location)
+        market_map.draw(frame, customers=supermarket.active_customers)
 
         key = cv2.waitKey(1)
 
         if key == 113:  # 'q' key
-            break
+            # todo: get all paths if interrupted:
 
+            all_clients_paths = supermarket.get_customers_paths()
+
+            with open(
+                f"data/customers_paths_{supermarket.time}.json", "w"
+            ) as fp:
+                json.dump(all_clients_paths, fp)
+            break
 
         cv2.imshow("frame", frame)
 
